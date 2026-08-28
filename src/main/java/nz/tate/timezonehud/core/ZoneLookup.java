@@ -24,6 +24,9 @@
  */
 package nz.tate.timezonehud.core;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -38,29 +41,44 @@ public final class ZoneLookup
 	public enum Status
 	{
 		RESOLVED,
+		/** Recognised, but it means more than one place. D6 refuses to guess. */
+		AMBIGUOUS,
 		UNKNOWN
 	}
 
 	private final Status status;
 	private final String token;
 	private final ZoneEntry zone;
+	private final List<ZoneEntry> candidates;
 
-	private ZoneLookup(Status status, String token, ZoneEntry zone)
+	private ZoneLookup(Status status, String token, ZoneEntry zone, List<ZoneEntry> candidates)
 	{
 		this.status = status;
 		this.token = token;
 		this.zone = zone;
+		this.candidates = candidates;
 	}
 
 	public static ZoneLookup resolved(String token, ZoneEntry zone)
 	{
 		Objects.requireNonNull(zone, "zone");
-		return new ZoneLookup(Status.RESOLVED, token, zone);
+		return new ZoneLookup(Status.RESOLVED, token, zone, Collections.emptyList());
+	}
+
+	public static ZoneLookup ambiguous(String token, List<ZoneEntry> candidates)
+	{
+		Objects.requireNonNull(candidates, "candidates");
+		if (candidates.size() < 2)
+		{
+			throw new IllegalArgumentException("an ambiguous token needs at least two candidates");
+		}
+		List<ZoneEntry> copy = Collections.unmodifiableList(new ArrayList<>(candidates));
+		return new ZoneLookup(Status.AMBIGUOUS, token, null, copy);
 	}
 
 	public static ZoneLookup unknown(String token)
 	{
-		return new ZoneLookup(Status.UNKNOWN, token, null);
+		return new ZoneLookup(Status.UNKNOWN, token, null, Collections.emptyList());
 	}
 
 	public Status getStatus()
@@ -81,6 +99,11 @@ public final class ZoneLookup
 		return status == Status.RESOLVED;
 	}
 
+	public boolean isAmbiguous()
+	{
+		return status == Status.AMBIGUOUS;
+	}
+
 	public boolean isUnknown()
 	{
 		return status == Status.UNKNOWN;
@@ -94,9 +117,22 @@ public final class ZoneLookup
 		return zone;
 	}
 
+	/**
+	 * The places the token could have meant, in the order the "did you mean" should list
+	 * them. Empty unless {@link #isAmbiguous()}.
+	 */
+	public List<ZoneEntry> getCandidates()
+	{
+		return candidates;
+	}
+
 	@Override
 	public String toString()
 	{
+		if (status == Status.AMBIGUOUS)
+		{
+			return status + "(" + token + " -> " + candidates + ")";
+		}
 		return status + "(" + token + (zone == null ? "" : " -> " + zone) + ")";
 	}
 }

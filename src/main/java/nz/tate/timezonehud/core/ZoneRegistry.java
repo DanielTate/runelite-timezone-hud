@@ -25,8 +25,10 @@
 package nz.tate.timezonehud.core;
 
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -44,10 +46,16 @@ import java.util.TreeMap;
  */
 public final class ZoneRegistry
 {
+	/** IANA id to a token the user can actually type for it. Filled in by buildAliases(). */
+	private static final Map<String, String> EXAMPLE_TOKENS = new HashMap<>();
+
 	private static final Map<String, ZoneEntry> ALIASES = buildAliases();
 
 	/** IANA id to its curated entry, so a stored zone id gets its hand-written label back. */
 	private static final Map<String, ZoneEntry> BY_ZONE_ID = buildByZoneId();
+
+	/** Tokens that mean more than one place. D6 refuses these rather than picking one. */
+	private static final Map<String, List<ZoneEntry>> CONTESTED = buildContested();
 
 	/** Lower-cased IANA id to its canonical spelling, so "pacific/auckland" resolves. */
 	private static final Map<String, String> IANA_IDS = buildIanaIds();
@@ -74,8 +82,17 @@ public final class ZoneRegistry
 			return ZoneLookup.unknown(token);
 		}
 
+		String key = normalise(trimmed);
+
+		// Contested first: "CST" must never quietly become one of its three meanings.
+		List<ZoneEntry> candidates = CONTESTED.get(key);
+		if (candidates != null)
+		{
+			return ZoneLookup.ambiguous(trimmed, candidates);
+		}
+
 		// Our curated table wins over the raw IANA ids so that we control the display name.
-		ZoneEntry alias = ALIASES.get(normalise(trimmed));
+		ZoneEntry alias = ALIASES.get(key);
 		if (alias != null)
 		{
 			return ZoneLookup.resolved(trimmed, alias);
@@ -102,11 +119,22 @@ public final class ZoneRegistry
 
 	/**
 	 * True if the token means something to us, whether or not it resolves cleanly. The
-	 * command parser uses this to decide how many words of "new york city 8pm" are the zone.
+	 * command parser uses this to decide how many words of "new york 8pm" are the zone.
 	 */
 	public static boolean isKnownToken(String token)
 	{
 		return !lookup(token).isUnknown();
+	}
+
+	/**
+	 * A token the user can type to reach this zone unambiguously, for D6's "did you mean".
+	 * Display names such as "US Eastern" are not themselves valid input, so an ambiguity
+	 * message has to offer something else.
+	 */
+	public static String exampleToken(ZoneEntry entry)
+	{
+		String example = EXAMPLE_TOKENS.get(entry.getZoneId());
+		return example != null ? example : entry.getZoneId();
 	}
 
 	/**
@@ -207,8 +235,9 @@ public final class ZoneRegistry
 	}
 
 	/**
-	 * Adds one zone under several spellings. Sorted map so the table is easy to eyeball in
-	 * a debugger; the cost is irrelevant at this size.
+	 * Adds one zone under several spellings. The <em>first</em> token is the one D6's "did
+	 * you mean" offers back to the user, so it is always a name rather than an abbreviation.
+	 * Sorted map so the table is easy to eyeball in a debugger; the cost is irrelevant here.
 	 */
 	private static void put(Map<String, ZoneEntry> table, String zoneId, String displayName, String... tokens)
 	{
@@ -217,6 +246,40 @@ public final class ZoneRegistry
 		{
 			table.put(normalise(token), entry);
 		}
+		EXAMPLE_TOKENS.put(zoneId, tokens[0]);
+	}
+
+	/**
+	 * Records a token that means more than one place. D6 refuses to guess between them,
+	 * because a wrong guess produces a plausible-looking time in the wrong country.
+	 */
+	private static void contest(Map<String, List<ZoneEntry>> table, String token, String... zoneIds)
+	{
+		List<ZoneEntry> candidates = new ArrayList<>(zoneIds.length);
+		for (String zoneId : zoneIds)
+		{
+			ZoneEntry entry = BY_ZONE_ID.get(zoneId);
+			if (entry == null)
+			{
+				throw new IllegalStateException("contested zone " + zoneId + " is missing from the alias table");
+			}
+			candidates.add(entry);
+		}
+		table.put(normalise(token), Collections.unmodifiableList(candidates));
+	}
+
+	private static Map<String, List<ZoneEntry>> buildContested()
+	{
+		Map<String, List<ZoneEntry>> table = new TreeMap<>();
+
+		contest(table, "IST", "Asia/Kolkata", "Europe/Dublin", "Asia/Jerusalem");
+		contest(table, "CST", "America/Chicago", "Asia/Shanghai", "America/Havana");
+		contest(table, "BST", "Europe/London", "Asia/Dhaka");
+		contest(table, "AST", "America/Halifax", "Asia/Riyadh");
+		contest(table, "ACST", "Australia/Adelaide", "Australia/Darwin");
+		contest(table, "AMT", "America/Manaus", "Asia/Yerevan");
+
+		return Collections.unmodifiableMap(table);
 	}
 
 	private static Map<String, ZoneEntry> buildAliases()
@@ -224,23 +287,25 @@ public final class ZoneRegistry
 		Map<String, ZoneEntry> table = new TreeMap<>();
 
 		// -- North America ------------------------------------------------------------
-		put(table, "America/New_York", "US Eastern", "est", "edt", "et", "new york", "nyc", "boston", "miami", "atlanta");
-		put(table, "America/Chicago", "US Central", "cdt", "ct", "chicago", "dallas", "houston");
-		put(table, "America/Denver", "US Mountain", "mst", "mdt", "mt", "denver", "salt lake city");
-		put(table, "America/Los_Angeles", "US Pacific", "pst", "pdt", "pt", "los angeles", "la", "san francisco", "seattle");
+		put(table, "America/New_York", "US Eastern", "new york", "est", "edt", "et", "nyc", "boston", "miami", "atlanta");
+		put(table, "America/Chicago", "US Central", "chicago", "cdt", "ct", "dallas", "houston");
+		put(table, "America/Denver", "US Mountain", "denver", "mst", "mdt", "mt", "salt lake city");
+		put(table, "America/Los_Angeles", "US Pacific", "los angeles", "pst", "pdt", "pt", "la", "san francisco", "seattle");
 		put(table, "America/Phoenix", "US Arizona", "arizona", "phoenix");
-		put(table, "America/Anchorage", "US Alaska", "akst", "akdt", "alaska", "anchorage");
-		put(table, "Pacific/Honolulu", "US Hawaii", "hst", "hawaii", "honolulu");
+		put(table, "America/Anchorage", "US Alaska", "alaska", "akst", "akdt", "anchorage");
+		put(table, "Pacific/Honolulu", "US Hawaii", "hawaii", "hst", "honolulu");
 		put(table, "America/Toronto", "Canada Eastern", "toronto", "ottawa", "montreal");
-		put(table, "America/Halifax", "Atlantic Canada", "adt", "halifax");
-		put(table, "America/Mexico_City", "Mexico", "mexico", "mexico city");
-		put(table, "America/Sao_Paulo", "Brazil", "brt", "brazil", "sao paulo");
+		put(table, "America/Halifax", "Atlantic Canada", "halifax", "adt");
+		put(table, "America/Havana", "Cuba", "havana", "cuba");
+		put(table, "America/Mexico_City", "Mexico", "mexico city", "mexico");
+		put(table, "America/Sao_Paulo", "Brazil", "sao paulo", "brt", "brazil");
+		put(table, "America/Manaus", "Amazon", "manaus", "amazon");
 
 		// -- Europe / Africa ----------------------------------------------------------
-		put(table, "Europe/London", "UK", "gmt", "uk", "london", "britain", "england", "edinburgh", "cardiff", "belfast");
-		put(table, "Europe/Dublin", "Ireland", "ireland", "dublin");
-		put(table, "Europe/Lisbon", "Portugal", "wet", "portugal", "lisbon");
-		put(table, "Europe/Paris", "Central Europe", "cet", "cest", "paris", "france");
+		put(table, "Europe/London", "UK", "london", "gmt", "uk", "britain", "england", "edinburgh", "cardiff", "belfast");
+		put(table, "Europe/Dublin", "Ireland", "dublin", "ireland");
+		put(table, "Europe/Lisbon", "Portugal", "lisbon", "wet", "portugal");
+		put(table, "Europe/Paris", "Central Europe", "paris", "cet", "cest", "france");
 		put(table, "Europe/Berlin", "Central Europe", "berlin", "germany", "hamburg", "munich");
 		put(table, "Europe/Amsterdam", "Central Europe", "amsterdam", "netherlands");
 		put(table, "Europe/Madrid", "Central Europe", "madrid", "spain");
@@ -248,38 +313,39 @@ public final class ZoneRegistry
 		put(table, "Europe/Stockholm", "Central Europe", "stockholm", "sweden");
 		put(table, "Europe/Oslo", "Central Europe", "oslo", "norway");
 		put(table, "Europe/Warsaw", "Central Europe", "warsaw", "poland");
-		put(table, "Europe/Helsinki", "Eastern Europe", "eet", "eest", "helsinki", "finland");
+		put(table, "Europe/Helsinki", "Eastern Europe", "helsinki", "eet", "eest", "finland");
 		put(table, "Europe/Athens", "Eastern Europe", "athens", "greece");
-		put(table, "Europe/Moscow", "Moscow", "msk", "moscow", "russia");
-		put(table, "Africa/Johannesburg", "South Africa", "sast", "johannesburg", "south africa", "cape town");
-		put(table, "Africa/Lagos", "West Africa", "wat", "lagos", "nigeria");
+		put(table, "Europe/Moscow", "Moscow", "moscow", "msk", "russia");
+		put(table, "Africa/Johannesburg", "South Africa", "johannesburg", "sast", "south africa", "cape town");
+		put(table, "Africa/Lagos", "West Africa", "lagos", "wat", "nigeria");
 		put(table, "Africa/Cairo", "Egypt", "cairo", "egypt");
 
 		// -- Asia / Middle East -------------------------------------------------------
-		put(table, "Asia/Kolkata", "India", "india", "kolkata", "calcutta", "mumbai", "delhi", "new delhi", "bangalore");
-		put(table, "Asia/Jerusalem", "Israel", "idt", "israel", "jerusalem", "tel aviv");
-		put(table, "Asia/Dubai", "Gulf", "gst", "dubai", "uae", "abu dhabi");
+		put(table, "Asia/Kolkata", "India", "kolkata", "india", "calcutta", "mumbai", "delhi", "new delhi", "bangalore");
+		put(table, "Asia/Jerusalem", "Israel", "jerusalem", "idt", "israel", "tel aviv");
+		put(table, "Asia/Dubai", "Gulf", "dubai", "gst", "uae", "abu dhabi");
 		put(table, "Asia/Riyadh", "Arabia", "riyadh", "saudi arabia");
-		put(table, "Asia/Karachi", "Pakistan", "pkt", "karachi", "pakistan", "lahore");
-		put(table, "Asia/Dhaka", "Bangladesh", "bdt", "dhaka", "bangladesh");
-		put(table, "Asia/Bangkok", "Thailand", "ict", "bangkok", "thailand");
-		put(table, "Asia/Shanghai", "China", "china", "shanghai", "beijing");
-		put(table, "Asia/Hong_Kong", "Hong Kong", "hkt", "hong kong");
-		put(table, "Asia/Singapore", "Singapore", "sgt", "singapore");
-		put(table, "Asia/Tokyo", "Japan", "jst", "japan", "tokyo", "osaka");
-		put(table, "Asia/Seoul", "Korea", "kst", "korea", "seoul", "south korea");
-		put(table, "Asia/Manila", "Philippines", "pht", "manila", "philippines");
-		put(table, "Asia/Jakarta", "Indonesia", "wib", "jakarta", "indonesia");
+		put(table, "Asia/Yerevan", "Armenia", "yerevan", "armenia");
+		put(table, "Asia/Karachi", "Pakistan", "karachi", "pkt", "pakistan", "lahore");
+		put(table, "Asia/Dhaka", "Bangladesh", "dhaka", "bdt", "bangladesh");
+		put(table, "Asia/Bangkok", "Thailand", "bangkok", "ict", "thailand");
+		put(table, "Asia/Shanghai", "China", "shanghai", "china", "beijing");
+		put(table, "Asia/Hong_Kong", "Hong Kong", "hong kong", "hkt");
+		put(table, "Asia/Singapore", "Singapore", "singapore", "sgt");
+		put(table, "Asia/Tokyo", "Japan", "tokyo", "jst", "japan", "osaka");
+		put(table, "Asia/Seoul", "Korea", "seoul", "kst", "korea", "south korea");
+		put(table, "Asia/Manila", "Philippines", "manila", "pht", "philippines");
+		put(table, "Asia/Jakarta", "Indonesia", "jakarta", "wib", "indonesia");
 
 		// -- Oceania ------------------------------------------------------------------
-		put(table, "Pacific/Auckland", "New Zealand", "nzst", "nzdt", "nz", "new zealand", "auckland", "wellington", "christchurch");
-		put(table, "Pacific/Chatham", "Chatham Islands", "chast", "chadt", "chatham");
-		put(table, "Australia/Sydney", "Australia Eastern", "aest", "aedt", "aet", "sydney", "melbourne", "canberra", "hobart");
+		put(table, "Pacific/Auckland", "New Zealand", "new zealand", "nzst", "nzdt", "nz", "auckland", "wellington", "christchurch");
+		put(table, "Pacific/Chatham", "Chatham Islands", "chatham", "chast", "chadt");
+		put(table, "Australia/Sydney", "Australia Eastern", "sydney", "aest", "aedt", "aet", "melbourne", "canberra", "hobart");
 		put(table, "Australia/Brisbane", "Australia Eastern (QLD)", "brisbane", "queensland");
-		put(table, "Australia/Adelaide", "Australia Central", "acdt", "adelaide");
+		put(table, "Australia/Adelaide", "Australia Central", "adelaide", "acdt");
 		put(table, "Australia/Darwin", "Australia Central (NT)", "darwin", "northern territory");
-		put(table, "Australia/Perth", "Australia Western", "awst", "perth", "western australia");
-		put(table, "Pacific/Fiji", "Fiji", "fjt", "fiji", "suva");
+		put(table, "Australia/Perth", "Australia Western", "perth", "awst", "western australia");
+		put(table, "Pacific/Fiji", "Fiji", "fiji", "fjt", "suva");
 
 		// -- Offsets ------------------------------------------------------------------
 		put(table, "UTC", "UTC", "utc", "z", "zulu", "jagex", "game time");
