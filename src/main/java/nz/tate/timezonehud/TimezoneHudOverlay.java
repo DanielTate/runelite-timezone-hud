@@ -26,10 +26,12 @@ package nz.tate.timezonehud;
 
 import java.awt.Dimension;
 import java.awt.Graphics2D;
+import java.util.List;
 import java.util.Objects;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
+import net.runelite.client.ui.overlay.components.LineComponent;
 
 /**
  * The in-game clock panel: every clock in the list, in list order, per D3.
@@ -45,15 +47,27 @@ import net.runelite.client.ui.overlay.OverlayPosition;
 public class TimezoneHudOverlay extends OverlayPanel
 {
 	private final TimezoneHudConfig config;
+	private final ClockListModel clockList;
+	private final ClockLineCache lineCache;
 
-	public TimezoneHudOverlay(TimezoneHudPlugin plugin, TimezoneHudConfig config)
+	/** The rows currently loaded into the panel, so an unchanged frame does no work. */
+	private List<ClockLine> drawnLines;
+
+	public TimezoneHudOverlay(TimezoneHudPlugin plugin, TimezoneHudConfig config,
+		ClockListModel clockList, java.time.Clock clock)
 	{
 		super(plugin);
 		this.config = Objects.requireNonNull(config, "config");
+		this.clockList = Objects.requireNonNull(clockList, "clockList");
+		this.lineCache = new ClockLineCache(clock);
 
 		setPosition(OverlayPosition.DETACHED);
 		setLayer(OverlayLayer.ABOVE_WIDGETS);
 		setPriority(PRIORITY_LOW);
+
+		// OverlayPanel throws its components away after every frame by default, which
+		// would force a rebuild each time and undo the caching below.
+		setClearChildren(false);
 	}
 
 	@Override
@@ -62,6 +76,28 @@ public class TimezoneHudOverlay extends OverlayPanel
 		if (!config.showOverlay())
 		{
 			return null;
+		}
+
+		List<ClockLine> lines = lineCache.getLines(clockList.getClocks(), config.twentyFourHour());
+		if (lines.isEmpty())
+		{
+			return null;
+		}
+
+		// The cache hands back the same list object until something actually changes, so
+		// this comparison is how a normal frame gets away with drawing what is already
+		// there instead of rebuilding the panel's components.
+		if (lines != drawnLines)
+		{
+			panelComponent.getChildren().clear();
+			for (ClockLine line : lines)
+			{
+				panelComponent.getChildren().add(LineComponent.builder()
+					.left(line.getLabel())
+					.right(line.getTime())
+					.build());
+			}
+			drawnLines = lines;
 		}
 
 		return super.render(graphics);

@@ -74,7 +74,7 @@ public class TimezoneHudPlugin extends Plugin
 		ConfigClockStore store = new ConfigClockStore(new ConfigManagerValues(configManager), gson);
 		clockList = new ClockListModel(new ClockRepository(store, systemClock));
 
-		overlay = new TimezoneHudOverlay(this, config);
+		overlay = new TimezoneHudOverlay(this, config, clockList, systemClock);
 		overlayManager.add(overlay);
 
 		log.debug("Timezone HUD started with {} clocks", clockList.getClocks().size());
