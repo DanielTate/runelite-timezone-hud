@@ -543,3 +543,53 @@ which is what "no special-casing" was protecting.
 - Deleting the Local row is still allowed and still sticks, per D10.
 - A user who wants a *fixed* clock on their current zone can add that zone by name; the
   two are different things and both are available.
+
+---
+
+## D13. DST gaps and overlaps take the default resolution
+
+**Decision: accept `java.time`'s behaviour, with no warning.** This resolves O7.
+
+```
+spring forward   02:30 does not exist  -> pushed forward to 03:30, silently
+fall back        01:30 happens twice   -> the earlier offset wins, silently
+```
+
+**Rationale.** The fall-back case is already disambiguated for the reader, because D8
+prints the abbreviation live at the converted instant — `EDT` and `EST` at the same wall
+clock are visibly different answers. The spring-forward gap affects one hour per zone per
+year, and adding a warning to D8's fixed output contract costs more than the edge case is
+worth.
+
+**Consequences**
+
+- **The behaviour is pinned by tests**, so a JDK tzdb change would be caught rather than
+  silently altering answers.
+- No policy was invented. If this ever bites, the tests document exactly what today's
+  behaviour is, which is the hard part of changing it later.
+
+---
+
+## D14. Command grammar, closed
+
+**Decision: the grammar is what D5 describes, with these four points settled.** This
+resolves O4.
+
+- **No explicit dates in v1.** `now` and bare times cover "let's meet soon", which is the
+  actual use case. Dates would drag in the year handling D8 deliberately omits, and the
+  parser would need a date grammar on top of a time grammar for a rarer case.
+- **Multi-word cities use longest-match** against the alias table. D6's "did you mean"
+  tells users to type a city name, so city input is load-bearing rather than a
+  convenience.
+- **Bare `!TZ` prints a one-line usage hint.** It must never dump every clock: `!TZ` is
+  public, and a plugin that turns one keystroke into a wall of text is a plugin people ask
+  each other to turn off.
+- **Unknown and ambiguous tokens produce visibly different messages**, per D6. "IST is
+  ambiguous" and "IST is not a zone I know" send the user to different next actions.
+
+**Consequences**
+
+- 12-hour rows render as `8:30 AM EDT`, which D9 left unspecified.
+- Longest-match has rough edges, logged in `RISKS.md`: a trailing unknown word is reported
+  as a bad *time* rather than an unknown zone, and no multi-word alias may contain the
+  standalone word `to`, since that is a separator.

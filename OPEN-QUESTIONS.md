@@ -1,32 +1,22 @@
 # Timezone Plugin — Open Questions
 
-Unresolved. Each needs an answer before or during build.
+**All resolved.** Kept as a record of where each answer lives.
 
-**Resolved and moved to `DECISIONS.md`:** O1 (row labels -> D7), O2 (abbreviation
-collisions -> D6), O3 (HUD master toggle -> D11), O5 (output string -> D8), O6 (clock
-format -> D9), O8 (Jagex clock -> D10).
+| | |
+|---|---|
+| O1 row labels | D7 — labelled by zone name, abbreviation beside the time |
+| O2 abbreviation collisions | D6 — ambiguous tokens rejected with a "did you mean" |
+| O3 HUD master toggle | D11 |
+| O4 command grammar | D14 — no dates in v1, longest-match cities, usage hint on bare `!TZ` |
+| O5 output string | D8 — both days always shown |
+| O6 clock format | D9 — 24h default, no seconds, date only when it differs |
+| O7 DST gaps and overlaps | D13 — `java.time` defaults, pinned by tests |
+| O8 Jagex clock | D10 — Local and Jagex seeded as ordinary removable rows |
 
----
+Two things remain, and neither is a design question:
 
-**O4. Command grammar details left open by D5.**
-- Can a date be supplied? `!TZ EST 20:30 sat > NZST`, or `28/8`? D8 omits the year from
-  the output, which is only safe while dates stay near-term — settle both together.
-- How are multi-word city aliases delimited, given the parser is whitespace-driven?
-  ("new york" — quoted? underscore? longest-match against the alias table?) D6 makes
-  this more pressing: the "did you mean" hint tells users to type a city name, so city
-  input has to actually work.
-- What does `!TZ` with no arguments do — usage hint, or dump all your clocks?
-- Behaviour on an **unknown** zone token. D6 settles the *ambiguous* case and requires
-  the two errors look visibly different, so the unknown-token message needs designing
-  alongside it.
-
-**O7. DST transition edge cases.**
-
-`20:30` on a spring-forward day may not exist; on a fall-back day it happens twice.
-`java.time` resolves both silently by default. Decide whether to surface a warning or
-accept the default resolution.
-
-Note this now has an output-format consequence: D8 prints the abbreviation live at the
-converted instant, so a fall-back ambiguity is the one case where the abbreviation
-genuinely disambiguates the answer (`EDT` vs `EST` at the same wall-clock time). That may
-be enough on its own, or may argue for saying so explicitly.
+- **Verify in-game.** Nothing in the RuneLite-facing layer has run in a client, and per
+  RuneLite's guidelines an agent must not drive the game. See the README.
+- **Check the plugin name against the hub before submitting.** "Timezone HUD" is the
+  working name; `time-zone-clocks` already exists and is a different plugin. This needs a
+  GitHub account and a plugin-hub PR either way.
