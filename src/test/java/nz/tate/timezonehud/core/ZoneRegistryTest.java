@@ -236,4 +236,25 @@ public class ZoneRegistryTest
 		assertTrue(ZoneRegistry.isKnownToken("salt lake city"));
 		assertTrue(ZoneRegistry.maxTokenWords() >= 3);
 	}
+
+	@Test
+	public void gmtMeansUtcNotUkLocalTime()
+	{
+		// GMT is a time scale meaning UTC+0. Resolving it to Europe/London would make a
+		// summer conversion answer in BST, contradicting the token the user typed.
+		assertEquals("UTC", zoneIdOf("gmt"));
+
+		// Renders as UTC year-round. A different word from the one typed, but the same
+		// instant -- unlike BST, which would have been a different time.
+		assertEquals("UTC", abbreviationAt("gmt", AUGUST));
+		assertEquals("UTC", abbreviationAt("gmt", JANUARY));
+	}
+
+	@Test
+	public void ukTokensStillFollowBritishSummerTime()
+	{
+		assertEquals("Europe/London", zoneIdOf("london"));
+		assertEquals("Europe/London", zoneIdOf("uk"));
+		assertEquals("BST", abbreviationAt("london", AUGUST));
+	}
 }

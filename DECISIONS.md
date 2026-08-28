@@ -271,6 +271,30 @@ point for NZ<->US conversions:
 
 See O5 -- exact output string is still open.
 
+
+### Amendment — `GMT` resolves to UTC, not to `Europe/London`
+
+Found during the build. D1's rule is right for colloquial *place* abbreviations: `EST`
+means "US Eastern, whatever it is doing today". But `GMT` is not one of those — it is a
+time scale that literally means UTC+0.
+
+Mapping it onto `Europe/London` made the converter contradict its own input:
+
+```
+!TZ GMT 20:30 > NZST      in August
+
+  read as 20:30 London time (UTC+1)
+  D8 prints the abbreviation live at that instant
+  -> "20:30 BST (...)"    the user typed GMT
+```
+
+That is precisely the quiet wrongness D6 exists to prevent, arrived at from the other
+direction. `gmt` now points at the `UTC` zone; `london`, `uk`, `britain` and the city
+names keep `Europe/London` and still flip to `BST` in summer.
+
+`GMT` therefore renders as `UTC` rather than `GMT` — a different word from the one typed,
+but the same instant. That is a much smaller surprise than a different time.
+
 ---
 
 ## D6. Ambiguous abbreviations are rejected, not guessed

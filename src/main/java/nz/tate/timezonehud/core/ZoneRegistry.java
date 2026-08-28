@@ -302,7 +302,7 @@ public final class ZoneRegistry
 		put(table, "America/Manaus", "Amazon", "manaus", "amazon");
 
 		// -- Europe / Africa ----------------------------------------------------------
-		put(table, "Europe/London", "UK", "london", "gmt", "uk", "britain", "england", "edinburgh", "cardiff", "belfast");
+		put(table, "Europe/London", "UK", "london", "uk", "britain", "england", "edinburgh", "cardiff", "belfast");
 		put(table, "Europe/Dublin", "Ireland", "dublin", "ireland");
 		put(table, "Europe/Lisbon", "Portugal", "lisbon", "wet", "portugal");
 		put(table, "Europe/Paris", "Central Europe", "paris", "cet", "cest", "france");
@@ -348,7 +348,11 @@ public final class ZoneRegistry
 		put(table, "Pacific/Fiji", "Fiji", "fiji", "fjt", "suva");
 
 		// -- Offsets ------------------------------------------------------------------
-		put(table, "UTC", "UTC", "utc", "z", "zulu", "jagex", "game time");
+		// GMT is a real time scale meaning UTC+0, not a colloquial name for UK local
+		// time. Pointing it at Europe/London would make "!tz GMT 20:30" print "20:30
+		// BST" in summer -- an answer that contradicts what was typed. Type "london"
+		// or "uk" for UK local time.
+		put(table, "UTC", "UTC", "utc", "gmt", "z", "zulu", "jagex", "game time");
 
 		return Collections.unmodifiableMap(table);
 	}
