@@ -28,10 +28,14 @@ import com.google.gson.Gson;
 import com.google.inject.Provides;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
+import javax.swing.SwingUtilities;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.ClientToolbar;
+import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.util.ImageUtil;
 import nz.tate.timezonehud.core.ClockRepository;
 
 /**
@@ -56,6 +60,9 @@ public class TimezoneHudPlugin extends Plugin
 	private OverlayManager overlayManager;
 
 	@Inject
+	private ClientToolbar clientToolbar;
+
+	@Inject
 	private Gson gson;
 
 	@Inject
@@ -63,6 +70,8 @@ public class TimezoneHudPlugin extends Plugin
 
 	private ClockListModel clockList;
 	private TimezoneHudOverlay overlay;
+	private TimezoneHudPanel panel;
+	private NavigationButton navigationButton;
 
 	@Override
 	protected void startUp()
@@ -77,13 +86,30 @@ public class TimezoneHudPlugin extends Plugin
 		overlay = new TimezoneHudOverlay(this, config, clockList, systemClock);
 		overlayManager.add(overlay);
 
+		panel = new TimezoneHudPanel(clockList, config, systemClock);
+		navigationButton = NavigationButton.builder()
+			.tooltip("World clocks")
+			.icon(ImageUtil.loadImageResource(TimezoneHudPlugin.class, "icon.png"))
+			.priority(7)
+			.panel(panel)
+			.build();
+		clientToolbar.addNavigation(navigationButton);
+
 		log.debug("Timezone HUD started with {} clocks", clockList.getClocks().size());
 	}
 
 	@Override
 	protected void shutDown()
 	{
+		clientToolbar.removeNavigation(navigationButton);
+
+		TimezoneHudPanel closing = panel;
+		SwingUtilities.invokeLater(closing::stop);
+
 		overlayManager.remove(overlay);
+
+		navigationButton = null;
+		panel = null;
 		overlay = null;
 		clockList = null;
 	}
