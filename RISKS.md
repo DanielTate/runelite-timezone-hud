@@ -4,6 +4,18 @@ Live record kept during the build. Newest first within each section.
 
 ## Open
 
+**R11. `ClockStore` defines the persistence seam but nothing implements it yet.** Commit 8
+deliberately stops at the interface: the ConfigManager-backed implementation, the config
+group and the serialisation format all belong to commit 9. Until that lands, the clock list
+exists only in tests. Note also that `setClocks` marks the store seeded, so the very first
+thing a commit 9 implementation must get right is persisting the seeded flag separately from
+the list -- if the flag is derived from the list, D10's "a cleared list stays cleared" breaks.
+
+**R10. The core clock class is named `WorldClock`, not `Clock` as PLAN.md's diagram has it.**
+Every class in the core takes an injected `java.time.Clock`, so a type named `Clock` in the
+same package would have to be disambiguated at every use site. Renamed rather than fought
+with. PLAN.md was not edited.
+
 **R9. The grammar accepts no date, so D8's omitted year stays safe -- for now.** O4 leaves
 open whether `!TZ EST 20:30 sat > NZST` should work. Commit 6 does not implement it: a time
 is always interpreted on today's date in the source zone. If dates are ever added, D8's
