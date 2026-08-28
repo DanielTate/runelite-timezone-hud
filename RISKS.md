@@ -67,6 +67,22 @@ and recreated correctly in commit 2. Worth a glance at any other path the scaffo
 
 ## Accepted
 
+**A2. DST gap and overlap times take java.time's default resolution, with no warning.**
+OPEN-QUESTIONS O7 is unresolved, so commit 7 pins the JDK's behaviour rather than inventing
+a policy:
+
+- **Spring-forward gap.** A wall-clock time that never happens is pushed forward by the
+  length of the gap. `!tz EST 02:30 > UTC` on 8 March 2026 answers as though 03:30 EDT had
+  been typed, silently.
+- **Fall-back overlap.** A wall-clock time that happens twice resolves to the *earlier*
+  offset. `!tz EST 01:30 > UTC` on 1 November 2026 answers 05:30 UTC (the -04:00 pass), not
+  06:30 UTC.
+
+Both are tested so a JDK change would be caught. The overlap case is partly self-describing
+because D8 prints the live abbreviation, so the answer says `EDT` and a reader who knows the
+date can tell which pass it took; the gap case has no such tell. Accepted as-is until O7 is
+settled -- adding a warning is a small, isolated change to TimeConverter if wanted.
+
 **A1. Several curated zones share one display name.** `Europe/Paris`, `Europe/Berlin`,
 `Europe/Madrid` and friends are all labelled "Central Europe" per D7's "label by zone, not
 by city" rule. Two clocks added from different cities in that band therefore render
