@@ -27,11 +27,13 @@ package nz.tate.timezonehud;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import javax.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
 import javax.swing.SwingUtilities;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.CommandExecuted;
+import net.runelite.client.chat.ChatCommandManager;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
@@ -43,11 +45,12 @@ import net.runelite.client.util.ImageUtil;
 import nz.tate.timezonehud.core.ClockRepository;
 
 /**
- * Wires the plugin together: storage, the shared clock list, and the in-game overlay.
+ * Wires the plugin together: storage, the shared clock list, the in-game overlay, the side
+ * panel and the two chat commands.
  *
  * <p>Everything with any logic in it lives in a class that imports nothing from RuneLite,
- * so this file stays close to pure wiring. There are no timers or background tasks here --
- * the overlay reads the time as it draws.
+ * so this file stays close to pure wiring. The only background task is the side panel's
+ * Swing timer, which runs while the panel is open; the overlay reads the time as it draws.
  */
 @Slf4j
 @PluginDescriptor(
@@ -60,8 +63,14 @@ public class TimezoneHudPlugin extends Plugin
 	/** RuneLite strips the "::" before it hands the command over. */
 	private static final String LOCAL_COMMAND = "tz";
 
+	/** Matched case-insensitively by ChatCommandManager, so !TZ and !tz both work. */
+	private static final String PUBLIC_COMMAND = "!tz";
+
 	@Inject
 	private Client client;
+
+	@Inject
+	private ChatCommandManager chatCommandManager;
 
 	@Inject
 	private ConfigManager configManager;
@@ -107,24 +116,22 @@ public class TimezoneHudPlugin extends Plugin
 			.build();
 		clientToolbar.addNavigation(navigationButton);
 
+		// Only the execute half is supplied. The other half of registerCommand is the
+		// before-send hook, which is the rule-breaking path -- see ChatDisplayRewriter.
+		chatCommandManager.registerCommand(PUBLIC_COMMAND, this::onPublicCommand);
+
 		log.debug("Timezone HUD started with {} clocks", clockList.getClocks().size());
 	}
 
 	@Override
 	protected void shutDown()
 	{
+		chatCommandManager.unregisterCommand(PUBLIC_COMMAND);
 		clientToolbar.removeNavigation(navigationButton);
-
-		TimezoneHudPanel closing = panel;
-		SwingUtilities.invokeLater(closing::stop);
-
 		overlayManager.remove(overlay);
 
-		navigationButton = null;
-		panel = null;
-		overlay = null;
-		responder = null;
-		clockList = null;
+		// The panel may still be on screen; stopping its timer has to happen on the EDT.
+		SwingUtilities.invokeLater(panel::stop);
 	}
 
 	/**
@@ -143,6 +150,21 @@ public class TimezoneHudPlugin extends Plugin
 		if (response.hasText())
 		{
 			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", response.getText(), null);
+		}
+	}
+
+	/**
+	 * D4's public path. The message has already gone to the server exactly as typed; all
+	 * that happens here is that the copy this client received is drawn differently.
+	 * {@link ChatDisplayRewriter} explains at length why it must stay that way.
+	 */
+	private void onPublicCommand(ChatMessage chatMessage, String message)
+	{
+		CommandResponse response = responder.respondToMessage(message);
+
+		if (ChatDisplayRewriter.rewrite(chatMessage, response))
+		{
+			client.refreshChat();
 		}
 	}
 
