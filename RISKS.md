@@ -4,6 +4,29 @@ Live record kept during the build. Newest first within each section.
 
 ## Open
 
+**R9. The grammar accepts no date, so D8's omitted year stays safe -- for now.** O4 leaves
+open whether `!TZ EST 20:30 sat > NZST` should work. Commit 6 does not implement it: a time
+is always interpreted on today's date in the source zone. If dates are ever added, D8's
+decision to omit the year has to be revisited in the same change.
+
+**R8. `!tz` with no arguments returns NO_ARGUMENTS and no opinion.** O4 has not settled
+whether that should print a usage hint or dump the user's clock list. The parser reports the
+condition and leaves the choice to the chat handler in commit 13/14.
+
+**R7. Bare one and two digit numbers are not accepted as times.** `!tz 8 > nzst` is read as
+the zone token "8", not as 08:00. D5's grammar lists `HHMM` and `H[:MM](am|pm)`, so a naked
+`8` is not strictly a time, and treating it as one would let a digit swallow a zone token.
+Three and four digit forms (`830`, `2030`) do work. Users who type `!tz 8 > nzst` will get an
+"unknown zone: 8" message, which is at least honest but may read oddly.
+
+**R6. Multi-word city names use longest match, with two rough edges (O4).** The parser tries
+the longest leading phrase that the alias table knows, so "new york 8pm" splits correctly.
+Two consequences worth knowing: (a) `!tz new york city > tokyo` matches "new york" and then
+reports "city" as a bad time rather than as an unknown zone -- the message will be confusing;
+(b) because `to` is a separator, no multi-word alias may contain the standalone word "to".
+None currently does, and a test would not catch a future one being added. O4 is still open;
+this is the implementation, not the decision.
+
 **R5. D10's sketch shows `Local` and `Jagex (UTC)` rows without an abbreviation, D9 shows
 every row with one.** The formatter always appends the abbreviation, because suppressing it
 for two particular rows is exactly the special-casing D10 forbids and D7 wants the live
