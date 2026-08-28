@@ -50,15 +50,6 @@ Commit 4 renders `8:30 AM EDT` (`h:mm a`, English, no leading zero, uppercase me
 Unlike D8's converter string this is not a stated contract, so it is safe to change, but the
 tests assert it exactly and would need updating.
 
-**R3. `GMT` resolves to `Europe/London`, which can contradict what the user typed.**
-D1 states the mapping `GMT/BST/UK -> Europe/London`, so that is what commit 2 ships. The
-consequence is that `!tz GMT 20:30 > NZST` in August is interpreted as 20:30 *London* time
-(UTC+1) and D8 will print the abbreviation live at that instant, i.e. `20:30 BST`. The
-output contradicts the input token. This is exactly the class of quiet wrongness D6 exists
-to prevent, but D1 is explicit and D1 predates D6, so this has been implemented as written
-rather than redesigned. Recommended fix if the user agrees: point `gmt` at the `UTC` zone
-(display "GMT") and leave `uk`/`london`/`britain` on `Europe/London`. Not done unilaterally.
-
 **R2. `Local` is seeded as a concrete zone id, so it does not follow a mid-session zone
 change.** D10 says "Local is a real zone lookup (the system default) ... so it behaves
 correctly if the user's machine changes zone mid-session", but it also says clocks are
@@ -69,6 +60,11 @@ seeding time, and stores the resulting id. If the user's machine changes zone th
 the old zone under the label "Local" until they edit it. Flagging rather than choosing.
 
 ## Resolved
+
+**R3. `GMT` resolved to `Europe/London`, contradicting what the user typed.** Fixed: `gmt`
+now points at the `UTC` zone, while `london`/`uk`/`britain` keep `Europe/London`. D1
+amended in place with the reasoning. `!TZ GMT 20:30` no longer answers in BST.
+
 
 **R1. Scaffold directories were created with literal backslashes in their names.** Commit 1
 left `src/main/java/nz\/tate\/timezonehud` (a directory literally named `nz\`) instead of
