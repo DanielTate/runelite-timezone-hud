@@ -80,11 +80,27 @@ public class ClockRepositoryTest
 	}
 
 	@Test
-	public void localIsTheZoneTheClockReports()
+	public void localFollowsTheMachineRatherThanFreezingAtSeedingTime()
 	{
 		ClockRepository american = new ClockRepository(new InMemoryClockStore(), Clock.fixed(NOW, NEW_YORK));
+		WorldClock local = american.getClocks().get(0);
 
-		assertEquals(NEW_YORK, american.getClocks().get(0).getZone());
+		// The row stores a sentinel, not a resolved zone, so it cannot go stale when the
+		// user moves country. It resolves against the machine at display time.
+		assertTrue(local.followsSystemZone());
+		assertEquals(WorldClock.SYSTEM_ZONE_ID, local.getZoneId());
+		assertEquals(ZoneId.systemDefault(), local.getZone());
+	}
+
+	@Test
+	public void localIsStillAnOrdinaryRow()
+	{
+		// D10 wants no special-casing: the seeded rows must rename, persist and delete
+		// exactly like any other. Only zone resolution differs.
+		WorldClock local = repository.getClocks().get(0);
+
+		assertEquals("Somewhere else", local.withLabel("Somewhere else").getLabel());
+		assertTrue(local.withLabel("Somewhere else").followsSystemZone());
 	}
 
 	@Test

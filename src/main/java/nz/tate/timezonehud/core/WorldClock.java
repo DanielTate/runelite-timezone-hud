@@ -41,18 +41,38 @@ import java.util.Objects;
  */
 public final class WorldClock
 {
-	private final ZoneId zone;
+	/**
+	 * Stored in place of a real zone id by the seeded "Local" row, so that it resolves to
+	 * whatever the machine's zone is at the moment it is displayed rather than whatever it
+	 * was when the row was created. A row labelled "Local" that keeps showing the old zone
+	 * after the user moves country is quietly wrong for as long as they fail to notice.
+	 */
+	public static final String SYSTEM_ZONE_ID = "SYSTEM";
+
+	private final String zoneId;
 	private final String label;
 
 	public WorldClock(ZoneId zone, String label)
 	{
-		this.zone = Objects.requireNonNull(zone, "zone");
-		this.label = Objects.requireNonNull(label, "label");
+		this(Objects.requireNonNull(zone, "zone").getId(), label);
 	}
 
 	public WorldClock(String zoneId, String label)
 	{
-		this(ZoneId.of(zoneId), label);
+		this.zoneId = Objects.requireNonNull(zoneId, "zoneId");
+		this.label = Objects.requireNonNull(label, "label");
+	}
+
+	/** The seeded local row. Follows the machine's zone for as long as it exists. */
+	public static WorldClock local(String label)
+	{
+		return new WorldClock(SYSTEM_ZONE_ID, label);
+	}
+
+	/** True when this row tracks the machine's zone rather than a fixed one. */
+	public boolean followsSystemZone()
+	{
+		return SYSTEM_ZONE_ID.equals(zoneId);
 	}
 
 	/**
@@ -71,7 +91,7 @@ public final class WorldClock
 
 	public ZoneId getZone()
 	{
-		return zone;
+		return followsSystemZone() ? ZoneId.systemDefault() : ZoneId.of(zoneId);
 	}
 
 	/**
@@ -79,7 +99,7 @@ public final class WorldClock
 	 */
 	public String getZoneId()
 	{
-		return zone.getId();
+		return zoneId;
 	}
 
 	public String getLabel()
@@ -92,7 +112,7 @@ public final class WorldClock
 	 */
 	public WorldClock withLabel(String newLabel)
 	{
-		return new WorldClock(zone, newLabel);
+		return new WorldClock(zoneId, newLabel);
 	}
 
 	@Override
@@ -107,18 +127,18 @@ public final class WorldClock
 			return false;
 		}
 		WorldClock that = (WorldClock) other;
-		return zone.equals(that.zone) && label.equals(that.label);
+		return zoneId.equals(that.zoneId) && label.equals(that.label);
 	}
 
 	@Override
 	public int hashCode()
 	{
-		return Objects.hash(zone, label);
+		return Objects.hash(zoneId, label);
 	}
 
 	@Override
 	public String toString()
 	{
-		return label + " (" + zone.getId() + ")";
+		return label + " (" + zoneId + ")";
 	}
 }

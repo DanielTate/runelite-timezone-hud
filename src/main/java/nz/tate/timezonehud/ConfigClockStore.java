@@ -147,6 +147,12 @@ public class ConfigClockStore implements ClockStore
 
 		try
 		{
+			if (WorldClock.SYSTEM_ZONE_ID.equals(entry.zoneId))
+			{
+				// Not an IANA id, so ZoneId.of would reject it. This is the seeded Local
+				// row, which resolves against the machine when it is displayed.
+				return WorldClock.local(entry.label);
+			}
 			return new WorldClock(ZoneId.of(entry.zoneId), entry.label);
 		}
 		catch (DateTimeException e)

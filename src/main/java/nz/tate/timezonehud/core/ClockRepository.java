@@ -79,13 +79,14 @@ public class ClockRepository
 	/**
 	 * What a new user starts with. Pure, so the seeding rule can be tested on its own.
 	 *
-	 * <p>Local is a real zone, resolved from the user's machine, rather than a formatting
-	 * shortcut -- see RISKS R2 for the consequence of resolving it once at seeding time.
+	 * <p>Local follows the machine's zone rather than freezing it at seeding time, so it
+	 * stays right if the user moves country. It is still an ordinary row: it persists,
+	 * reorders, renames and deletes exactly like any other.
 	 */
 	public static List<WorldClock> seedClocks(ZoneId localZone)
 	{
 		List<WorldClock> seeded = new ArrayList<>(2);
-		seeded.add(new WorldClock(localZone, LOCAL_LABEL));
+		seeded.add(WorldClock.local(LOCAL_LABEL));
 		seeded.add(new WorldClock(ZoneId.of("UTC"), JAGEX_LABEL));
 		return seeded;
 	}

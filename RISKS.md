@@ -71,16 +71,14 @@ Commit 4 renders `8:30 AM EDT` (`h:mm a`, English, no leading zero, uppercase me
 Unlike D8's converter string this is not a stated contract, so it is safe to change, but the
 tests assert it exactly and would need updating.
 
-**R2. `Local` is seeded as a concrete zone id, so it does not follow a mid-session zone
-change.** D10 says "Local is a real zone lookup (the system default) ... so it behaves
-correctly if the user's machine changes zone mid-session", but it also says clocks are
-ordinary rows with no special-casing and that the list persists. Those pull in opposite
-directions: a persisted row has to store *something*, and storing a sentinel like `SYSTEM`
-is the special-casing D10 forbids. Commit 8 resolves `ZoneId.systemDefault()` once, at
-seeding time, and stores the resulting id. If the user's machine changes zone the row keeps
-the old zone under the label "Local" until they edit it. Flagging rather than choosing.
 
 ## Resolved
+
+**R2. The `Local` clock froze its zone at seeding time.** Resolved by D12: the row now
+stores a `SYSTEM` sentinel and resolves against the machine when displayed, so it stays
+right if the user moves country. Implementing it surfaced a real bug -- the config store
+dropped the row because `SYSTEM` is not a valid IANA id -- which an existing test caught.
+
 
 **R3. `GMT` resolved to `Europe/London`, contradicting what the user typed.** Fixed: `gmt`
 now points at the `UTC` zone, while `london`/`uk`/`britain` keep `Europe/London`. D1

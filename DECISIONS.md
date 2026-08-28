@@ -506,3 +506,40 @@ edge case.
   per-clock hiding, and the panel remains the editor for what exists at all.
 - Interacts with D3's design intent: the panel curates *which clocks exist*, this toggle
   controls *whether the HUD is drawn*. Two clean, non-overlapping jobs.
+
+---
+
+## D12. The Local clock follows the machine's zone
+
+**Decision: the seeded Local row stores the sentinel `SYSTEM` rather than a resolved zone
+id, and resolves against the machine each time it is displayed.** This resolves the
+conflict logged as RISKS R2.
+
+```json
+{ "zoneId": "SYSTEM", "label": "Local" }
+```
+
+**The conflict.** D10 asked for two things that pull apart: clocks are *ordinary rows with
+no special-casing*, and Local *behaves correctly if the user's machine changes zone
+mid-session*. A persisted row has to store something, and storing a resolved zone id
+freezes it at seeding time.
+
+**Why this way round.** Resolving once is quietly wrong in a way the user is unlikely to
+catch: a row labelled "Local" that keeps showing Auckland after they move to London stays
+wrong until they happen to notice, and the label actively argues against noticing. The
+mid-session case D10 named is the mild version; moving country is the lasting one.
+
+**D10's actual intent survives.** The special case is one branch in one place — zone
+resolution. The row still persists, reorders, renames and deletes exactly like any other,
+which is what "no special-casing" was protecting.
+
+**Consequences**
+
+- **`SYSTEM` is not a valid IANA id**, so `ZoneId.of` rejects it. The config store checks
+  for the sentinel before parsing, otherwise it drops the row as an unknown zone — which
+  is exactly what happened the first time this was implemented, caught by an existing test.
+- **`WorldClock` stores the zone id as text and resolves on read.** That is also what the
+  persistence layer wanted anyway, since a saved clock is two plain strings.
+- Deleting the Local row is still allowed and still sticks, per D10.
+- A user who wants a *fixed* clock on their current zone can add that zone by name; the
+  two are different things and both are available.
