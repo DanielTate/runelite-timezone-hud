@@ -4,6 +4,15 @@ Live record kept during the build. Newest first within each section.
 
 ## Open
 
+**R12. `OverlayPosition.DETACHED` is deprecated in RuneLite client 1.12.37.** The build
+prints a deprecation note for it. It is kept anyway: decompiling `Overlay.setPosition`
+confirms DETACHED is still the only value that sets `movable = true` with
+`snappable = false`, which is exactly what D3 wants -- a HUD the user drags anywhere rather
+than one that snaps to a screen corner. `DYNAMIC` is not movable at all and every anchored
+position snaps. The warning is deliberately left unsuppressed so that an actual removal is
+noticed at the next client bump; if it goes, the overlay needs a new home and D3's "movable"
+promise has to be re-checked.
+
 **R11. `ClockStore` defines the persistence seam but nothing implements it yet.** Commit 8
 deliberately stops at the interface: the ConfigManager-backed implementation, the config
 group and the serialisation format all belong to commit 9. Until that lands, the clock list
