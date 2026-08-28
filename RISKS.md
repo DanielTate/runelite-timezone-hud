@@ -4,6 +4,17 @@ Live record kept during the build. Newest first within each section.
 
 ## Open
 
+**R5. D10's sketch shows `Local` and `Jagex (UTC)` rows without an abbreviation, D9 shows
+every row with one.** The formatter always appends the abbreviation, because suppressing it
+for two particular rows is exactly the special-casing D10 forbids and D7 wants the live
+abbreviation visible next to the time. The visible consequence is `Jagex (UTC)  08:30 UTC`,
+which reads slightly redundant. Cosmetic; flagging rather than choosing.
+
+**R4. D9 does not pin the shape of 12-hour output.** It only says there is a toggle.
+Commit 4 renders `8:30 AM EDT` (`h:mm a`, English, no leading zero, uppercase meridiem).
+Unlike D8's converter string this is not a stated contract, so it is safe to change, but the
+tests assert it exactly and would need updating.
+
 **R3. `GMT` resolves to `Europe/London`, which can contradict what the user typed.**
 D1 states the mapping `GMT/BST/UK -> Europe/London`, so that is what commit 2 ships. The
 consequence is that `!tz GMT 20:30 > NZST` in August is interpreted as 20:30 *London* time
