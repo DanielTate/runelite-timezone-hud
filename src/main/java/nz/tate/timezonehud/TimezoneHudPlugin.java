@@ -29,7 +29,11 @@ import com.google.inject.Provides;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import javax.swing.SwingUtilities;
+import net.runelite.api.ChatMessageType;
+import net.runelite.api.Client;
+import net.runelite.api.events.CommandExecuted;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
@@ -53,6 +57,12 @@ import nz.tate.timezonehud.core.ClockRepository;
 )
 public class TimezoneHudPlugin extends Plugin
 {
+	/** RuneLite strips the "::" before it hands the command over. */
+	private static final String LOCAL_COMMAND = "tz";
+
+	@Inject
+	private Client client;
+
 	@Inject
 	private ConfigManager configManager;
 
@@ -69,6 +79,7 @@ public class TimezoneHudPlugin extends Plugin
 	private TimezoneHudConfig config;
 
 	private ClockListModel clockList;
+	private CommandResponder responder;
 	private TimezoneHudOverlay overlay;
 	private TimezoneHudPanel panel;
 	private NavigationButton navigationButton;
@@ -82,6 +93,7 @@ public class TimezoneHudPlugin extends Plugin
 
 		ConfigClockStore store = new ConfigClockStore(new ConfigManagerValues(configManager), gson);
 		clockList = new ClockListModel(new ClockRepository(store, systemClock));
+		responder = new CommandResponder(systemClock);
 
 		overlay = new TimezoneHudOverlay(this, config, clockList, systemClock);
 		overlayManager.add(overlay);
@@ -111,7 +123,27 @@ public class TimezoneHudPlugin extends Plugin
 		navigationButton = null;
 		panel = null;
 		overlay = null;
+		responder = null;
 		clockList = null;
+	}
+
+	/**
+	 * D4's local path. {@code ::tz} is a client-only command -- RuneLite never sends it to
+	 * the server -- so the answer is simply printed for the player who typed it.
+	 */
+	@Subscribe
+	public void onCommandExecuted(CommandExecuted event)
+	{
+		if (!LOCAL_COMMAND.equalsIgnoreCase(event.getCommand()))
+		{
+			return;
+		}
+
+		CommandResponse response = responder.respondToArguments(event.getArguments());
+		if (response.hasText())
+		{
+			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", response.getText(), null);
+		}
 	}
 
 	@Provides

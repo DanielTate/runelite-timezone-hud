@@ -4,6 +4,14 @@ Live record kept during the build. Newest first within each section.
 
 ## Open
 
+**R13. D4's `::tz` sketch shows a `[World Clocks]` prefix and two lines; D8 says the two
+commands are byte-identical.** D8 is the later decision and resolves O5 explicitly ("one
+format, two paths ... no chance of the public and local forms disagreeing"), so the
+implementation follows D8: `::tz` prints exactly the same single line as `!TZ`, with no
+prefix. The GAMEMESSAGE colour already marks it as coming from a plugin. D4's sketch was
+drawn before the format was settled and was not amended. Flagging rather than choosing
+differently.
+
 **R12. `OverlayPosition.DETACHED` is deprecated in RuneLite client 1.12.37.** The build
 prints a deprecation note for it. It is kept anyway: decompiling `Overlay.setPosition`
 confirms DETACHED is still the only value that sets `movable = true` with
@@ -32,7 +40,11 @@ decision to omit the year has to be revisited in the same change.
 
 **R8. `!tz` with no arguments returns NO_ARGUMENTS and no opinion.** O4 has not settled
 whether that should print a usage hint or dump the user's clock list. The parser reports the
-condition and leaves the choice to the chat handler in commit 13/14.
+condition and leaves the choice to the chat handler in commit 13/14. Commit 13 chose the
+usage hint, for `::tz` only: it is the cheaper mistake to recover from, and dumping the
+clock list would duplicate the panel and the HUD. On the `!TZ` path nothing is printed at
+all, because rewriting someone's public message into an error message locally is worse than
+leaving the line they typed alone. O4 can still overrule this in one place.
 
 **R7. Bare one and two digit numbers are not accepted as times.** `!tz 8 > nzst` is read as
 the zone token "8", not as 08:00. D5's grammar lists `HHMM` and `H[:MM](am|pm)`, so a naked
