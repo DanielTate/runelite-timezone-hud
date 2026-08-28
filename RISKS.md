@@ -68,14 +68,12 @@ is the special-casing D10 forbids. Commit 8 resolves `ZoneId.systemDefault()` on
 seeding time, and stores the resulting id. If the user's machine changes zone the row keeps
 the old zone under the label "Local" until they edit it. Flagging rather than choosing.
 
+## Resolved
+
 **R1. Scaffold directories were created with literal backslashes in their names.** Commit 1
 left `src/main/java/nz\/tate\/timezonehud` (a directory literally named `nz\`) instead of
 `src/main/java/nz/tate/timezonehud`. They were empty, so git had not recorded them. Removed
 and recreated correctly in commit 2. Worth a glance at any other path the scaffold wrote.
-
-## Resolved
-
-*(none yet)*
 
 ## Accepted
 
