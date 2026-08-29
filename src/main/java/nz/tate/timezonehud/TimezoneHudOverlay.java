@@ -25,12 +25,14 @@
 package nz.tate.timezonehud;
 
 import java.awt.Dimension;
+import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.util.List;
 import java.util.Objects;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
+import net.runelite.client.ui.overlay.components.ComponentConstants;
 import net.runelite.client.ui.overlay.components.LineComponent;
 
 /**
@@ -49,6 +51,12 @@ public class TimezoneHudOverlay extends OverlayPanel
 	private final TimezoneHudConfig config;
 	private final ClockListModel clockList;
 	private final ClockLineCache lineCache;
+
+	/**
+	 * Space kept between a label and its time so the two columns never touch, plus room
+	 * for the panel's own border.
+	 */
+	private static final int COLUMN_GAP = 24;
 
 	/** The rows currently loaded into the panel, so an unchanged frame does no work. */
 	private List<ClockLine> drawnLines;
@@ -97,9 +105,34 @@ public class TimezoneHudOverlay extends OverlayPanel
 					.right(line.getTime())
 					.build());
 			}
+			panelComponent.setPreferredSize(new Dimension(panelWidth(widestRow(graphics, lines)), 0));
 			drawnLines = lines;
 		}
 
 		return super.render(graphics);
+	}
+
+	/** Width of the longest label-and-time pair, in pixels at the current font. */
+	private static int widestRow(Graphics2D graphics, List<ClockLine> lines)
+	{
+		FontMetrics metrics = graphics.getFontMetrics();
+		int widest = 0;
+		for (ClockLine line : lines)
+		{
+			int row = metrics.stringWidth(line.getLabel()) + metrics.stringWidth(line.getTime());
+			widest = Math.max(widest, row);
+		}
+		return widest;
+	}
+
+	/**
+	 * The panel is sized to its widest row rather than left at the default width, which
+	 * is too narrow for a zone name and a time side by side and wraps them onto two
+	 * lines. Never narrower than the standard width, so a short list still looks like
+	 * the other overlays.
+	 */
+	static int panelWidth(int widestRow)
+	{
+		return Math.max(ComponentConstants.STANDARD_WIDTH, widestRow + COLUMN_GAP);
 	}
 }
