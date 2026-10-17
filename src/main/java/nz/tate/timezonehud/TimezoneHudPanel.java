@@ -38,12 +38,14 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import net.runelite.client.ui.ColorScheme;
+import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import nz.tate.timezonehud.core.WorldClock;
 import nz.tate.timezonehud.core.ZoneEntry;
@@ -72,6 +74,9 @@ public class TimezoneHudPanel extends PluginPanel
 	 */
 	private static final int REFRESH_MILLIS = 1000;
 
+	/** Must match runelite-plugin.properties; a test checks it does. */
+	static final String VERSION = "1.0";
+
 	private final ClockListModel clockList;
 	private final TimezoneHudConfig config;
 	private final ClockLineCache lineCache;
@@ -97,10 +102,19 @@ public class TimezoneHudPanel extends PluginPanel
 
 		add(buildSearchArea(), BorderLayout.NORTH);
 		add(buildClockArea(), BorderLayout.CENTER);
+		add(versionLabel(), BorderLayout.SOUTH);
 
 		refreshTimer = new Timer(REFRESH_MILLIS, e -> refreshTimes());
 		clockList.addListener(clockListListener);
 		rebuildClockRows();
+	}
+
+	private static JLabel versionLabel()
+	{
+		JLabel version = new JLabel("v" + VERSION, SwingConstants.RIGHT);
+		version.setFont(FontManager.getRunescapeSmallFont());
+		version.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
+		return version;
 	}
 
 	@Override
