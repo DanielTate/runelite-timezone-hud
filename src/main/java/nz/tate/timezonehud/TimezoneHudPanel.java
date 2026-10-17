@@ -75,7 +75,7 @@ public class TimezoneHudPanel extends PluginPanel
 	private static final int REFRESH_MILLIS = 1000;
 
 	/** Must match runelite-plugin.properties; a test checks it does. */
-	static final String VERSION = "1.0";
+	static final String VERSION = "1.0.1";
 
 	private final ClockListModel clockList;
 	private final TimezoneHudConfig config;
