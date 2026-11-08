@@ -25,19 +25,18 @@
 package nz.tate.timezonehud;
 
 import java.awt.BorderLayout;
-import java.awt.Component;
-import java.awt.FlowLayout;
+import java.awt.Color;
+import java.awt.Dimension;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JButton;
+import java.util.function.BiConsumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
@@ -47,16 +46,15 @@ import javax.swing.event.DocumentListener;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.ui.components.IconTextField;
 import nz.tate.timezonehud.core.WorldClock;
 import nz.tate.timezonehud.core.ZoneEntry;
 
 /**
  * The clock editor, per D2: search every zone the JDK knows, add one, rename it, reorder it,
  * remove it. Panel order is HUD order (D3), so the arrows are meaningful rather than
- * decorative.
- *
- * <p>There is no per-clock visibility switch here. D3 is explicit that adding a zone is the
- * act of showing it, and D11's single overlay toggle lives in the config panel instead.
+ * decorative. Under the clocks sit switches for the two display settings, so they can be
+ * flipped without opening the config panel.
  *
  * <p>All of this runs on the Swing thread and none of it touches {@code Client}, so nothing
  * here needs {@code clientThread.invoke()}. Every decision worth testing -- what a search
@@ -75,38 +73,65 @@ public class TimezoneHudPanel extends PluginPanel
 	private static final int REFRESH_MILLIS = 1000;
 
 	/** Must match runelite-plugin.properties; a test checks it does. */
-	static final String VERSION = "1.0.1";
+	static final String VERSION = "1.1";
+
+	/** Splits "14:05 NZDT  Sun 9" or "2:05 PM NZDT" into the time and the rest. */
+	private static final Pattern TIME = Pattern.compile("^(\\d{1,2}:\\d{2}(?: [AaPp][Mm])?)\\s+(.*)$");
 
 	private final ClockListModel clockList;
 	private final TimezoneHudConfig config;
 	private final ClockLineCache lineCache;
+	private final BiConsumer<String, Boolean> setSetting;
 
-	private final JTextField searchField = new JTextField();
-	private final JPanel searchResults = new JPanel();
-	private final JPanel clockRows = new JPanel();
-	private final List<JLabel> timeLabels = new ArrayList<>();
+	private final IconTextField searchField = new IconTextField();
+	private final JPanel searchResults = PanelStyle.column(2);
+	private final JPanel clockRows = PanelStyle.column(4);
+	private final JLabel clockCount = PanelStyle.small("");
+	private final PanelStyle.Switch showOverlay;
+	private final PanelStyle.Switch twentyFourHour;
+	private final List<JLabel[]> timeLabels = new ArrayList<>();
 	private final Timer refreshTimer;
 	private final Runnable clockListListener = this::onClockListChanged;
 
 	private List<ClockLine> shownLines;
 
-	public TimezoneHudPanel(ClockListModel clockList, TimezoneHudConfig config, java.time.Clock clock)
+	/** {@code setSetting} changes a boolean config key, for the display switches. */
+	public TimezoneHudPanel(ClockListModel clockList, TimezoneHudConfig config, java.time.Clock clock,
+		BiConsumer<String, Boolean> setSetting)
 	{
 		this.clockList = Objects.requireNonNull(clockList, "clockList");
 		this.config = Objects.requireNonNull(config, "config");
 		this.lineCache = new ClockLineCache(clock);
+		this.setSetting = Objects.requireNonNull(setSetting, "setSetting");
+		showOverlay = new PanelStyle.Switch(config.showOverlay());
+		twentyFourHour = new PanelStyle.Switch(config.twentyFourHour());
 
-		setLayout(new BorderLayout(0, 8));
+		setLayout(new BorderLayout(0, PanelStyle.GAP));
 		setBorder(new EmptyBorder(10, 10, 10, 10));
 		setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-		add(buildSearchArea(), BorderLayout.NORTH);
-		add(buildClockArea(), BorderLayout.CENTER);
+		JPanel sections = PanelStyle.column(PanelStyle.GAP);
+		sections.add(header());
+		sections.add(PanelStyle.card("World clocks", clockCount, clockRows));
+		sections.add(PanelStyle.card("Add a clock", null, buildSearchArea()));
+		sections.add(PanelStyle.card("Display", null, buildDisplayArea()));
+		add(sections, BorderLayout.NORTH);
 		add(versionLabel(), BorderLayout.SOUTH);
 
 		refreshTimer = new Timer(REFRESH_MILLIS, e -> refreshTimes());
 		clockList.addListener(clockListListener);
 		rebuildClockRows();
+	}
+
+	private static JComponent header()
+	{
+		JLabel title = new JLabel("Timezone HUD");
+		title.setFont(FontManager.getRunescapeBoldFont().deriveFont(16f));
+		title.setForeground(Color.WHITE);
+		JPanel header = PanelStyle.column(2);
+		header.add(title);
+		header.add(PanelStyle.small("Clocks for anywhere, shown in game"));
+		return header;
 	}
 
 	private static JLabel versionLabel()
@@ -141,18 +166,21 @@ public class TimezoneHudPanel extends PluginPanel
 		clockList.removeListener(clockListListener);
 	}
 
-	private JPanel buildSearchArea()
+	/** Keeps the switches and the times in step when a setting changes elsewhere. */
+	public void settingsChanged()
 	{
-		JPanel area = new JPanel();
-		area.setLayout(new BoxLayout(area, BoxLayout.Y_AXIS));
-		area.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		showOverlay.setOn(config.showOverlay());
+		twentyFourHour.setOn(config.twentyFourHour());
+		rebuildClockRows();
+	}
 
-		JLabel title = new JLabel("Add a clock");
-		title.setForeground(ColorScheme.TEXT_COLOR);
-		title.setAlignmentX(Component.LEFT_ALIGNMENT);
-
+	private JComponent buildSearchArea()
+	{
+		searchField.setIcon(IconTextField.Icon.SEARCH);
+		searchField.setPreferredSize(new Dimension(0, 30));
+		searchField.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		searchField.setHoverBackgroundColor(ColorScheme.DARK_GRAY_HOVER_COLOR);
 		searchField.setToolTipText("City, abbreviation or IANA zone id -- try auckland, EST or Europe/Paris");
-		searchField.setAlignmentX(Component.LEFT_ALIGNMENT);
 		searchField.getDocument().addDocumentListener(new DocumentListener()
 		{
 			@Override
@@ -173,43 +201,43 @@ public class TimezoneHudPanel extends PluginPanel
 				updateSearchResults();
 			}
 		});
+		searchField.addClearListener(this::updateSearchResults);
 
-		searchResults.setLayout(new BoxLayout(searchResults, BoxLayout.Y_AXIS));
-		searchResults.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		searchResults.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-		area.add(title);
-		area.add(Box.createVerticalStrut(4));
-		area.add(searchField);
-		area.add(Box.createVerticalStrut(4));
+		JPanel area = PanelStyle.column(6);
+		area.add(PanelStyle.fixedHeight(searchField));
+		area.add(PanelStyle.small("Try a city, EST or Europe/Paris"));
 		area.add(searchResults);
+		updateSearchResults();
 		return area;
 	}
 
-	private JPanel buildClockArea()
+	private JComponent buildDisplayArea()
 	{
-		clockRows.setLayout(new BoxLayout(clockRows, BoxLayout.Y_AXIS));
-		clockRows.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-		// Wrapping in BorderLayout.NORTH keeps the rows at the top rather than stretching
-		// them down the panel when there are only a few.
-		JPanel area = new JPanel(new BorderLayout());
-		area.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		area.add(clockRows, BorderLayout.NORTH);
+		showOverlay.onChange(on -> setSetting.accept("showOverlay", on));
+		twentyFourHour.onChange(on -> setSetting.accept("twentyFourHour", on));
+		JPanel area = PanelStyle.column(10);
+		area.add(PanelStyle.toggle(showOverlay, "Clocks on screen", "The clock box over the game"));
+		area.add(PanelStyle.toggle(twentyFourHour, "24-hour time", "Off shows 2:05 PM"));
 		return area;
 	}
 
 	private void updateSearchResults()
 	{
 		searchResults.removeAll();
-
-		for (ZoneEntry entry : ZoneSearch.search(searchField.getText(), MAX_SEARCH_RESULTS))
+		String query = searchField.getText();
+		List<ZoneEntry> found = ZoneSearch.search(query, MAX_SEARCH_RESULTS);
+		searchResults.setVisible(!query.trim().isEmpty());
+		if (found.isEmpty())
 		{
-			JButton add = new JButton(entry.getDisplayName());
-			add.setToolTipText(entry.getZoneId());
-			add.setAlignmentX(Component.LEFT_ALIGNMENT);
-			add.addActionListener(e -> addClock(entry));
-			searchResults.add(add);
+			searchResults.add(PanelStyle.small("No time zones match."));
+		}
+		for (ZoneEntry entry : found)
+		{
+			JPanel row = PanelStyle.hoverRow(new BorderLayout(0, 1), () -> addClock(entry));
+			row.setToolTipText("Add a clock for " + entry.getDisplayName());
+			row.add(PanelStyle.text(entry.getDisplayName()), BorderLayout.NORTH);
+			row.add(PanelStyle.small(entry.getZoneId()), BorderLayout.SOUTH);
+			searchResults.add(PanelStyle.fixedHeight(row));
 		}
 
 		searchResults.revalidate();
@@ -232,21 +260,21 @@ public class TimezoneHudPanel extends PluginPanel
 	private void rebuildClockRows()
 	{
 		List<ClockLine> lines = lineCache.getLines(clockList.getClocks(), config.twentyFourHour());
+		List<WorldClock> clocks = clockList.getClocks();
 
 		clockRows.removeAll();
 		timeLabels.clear();
+		clockCount.setText(lines.size() == 1 ? "1 clock" : lines.size() + " clocks");
 
 		if (lines.isEmpty())
 		{
-			JLabel empty = new JLabel("No clocks yet.");
-			empty.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-			clockRows.add(empty);
+			clockRows.add(PanelStyle.small("No clocks yet. Search below to add one."));
 		}
 
 		for (int index = 0; index < lines.size(); index++)
 		{
-			clockRows.add(buildClockRow(index, lines.get(index), lines.size()));
-			clockRows.add(Box.createVerticalStrut(4));
+			String zone = index < clocks.size() ? clocks.get(index).getZoneId() : "";
+			clockRows.add(buildClockRow(index, lines.get(index), zone, lines.size()));
 		}
 
 		shownLines = lines;
@@ -254,51 +282,90 @@ public class TimezoneHudPanel extends PluginPanel
 		clockRows.repaint();
 	}
 
-	private JPanel buildClockRow(int index, ClockLine line, int total)
+	/**
+	 * One clock: its name, then the time large with the zone and any date beside it, and the
+	 * actions at the end of that line.
+	 */
+	private JComponent buildClockRow(int index, ClockLine line, String zone, int total)
 	{
-		JLabel label = new JLabel(line.getLabel());
-		label.setForeground(ColorScheme.TEXT_COLOR);
+		JLabel label = PanelStyle.text(line.getLabel());
+		label.setToolTipText(zone);
 
-		JLabel time = new JLabel(line.getTime());
-		time.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		timeLabels.add(time);
+		JLabel time = new JLabel();
+		time.setFont(FontManager.getRunescapeBoldFont());
+		time.setForeground(Color.WHITE);
+		JLabel rest = PanelStyle.small("");
+		showTime(line.getTime(), time, rest);
+		timeLabels.add(new JLabel[]{time, rest});
 
-		JPanel heading = new JPanel(new BorderLayout());
-		heading.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		heading.add(label, BorderLayout.WEST);
-		heading.add(time, BorderLayout.EAST);
+		JPanel timeLine = new JPanel(new BorderLayout(6, 0));
+		timeLine.setOpaque(false);
+		timeLine.add(time, BorderLayout.WEST);
+		timeLine.add(rest, BorderLayout.CENTER);
+		JPanel timeAndActions = new JPanel(new BorderLayout(4, 0));
+		timeAndActions.setOpaque(false);
+		timeAndActions.add(timeLine, BorderLayout.CENTER);
 
-		JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
-		buttons.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		buttons.add(button("^", "Move up", index > 0, () -> clockList.moveClock(index, index - 1)));
-		buttons.add(button("v", "Move down", index < total - 1, () -> clockList.moveClock(index, index + 1)));
-		buttons.add(button("Rename", "Rename this clock", true, () -> renameClock(index, line.getLabel())));
-		buttons.add(button("X", "Remove this clock", true, () -> clockList.removeClock(index)));
+		JLabel up = PanelStyle.link("\u25B4", "Move up", () -> clockList.moveClock(index, index - 1));
+		PanelStyle.enable(up, index > 0);
+		JLabel down = PanelStyle.link("\u25BE", "Move down", () -> clockList.moveClock(index, index + 1));
+		PanelStyle.enable(down, index < total - 1);
+		JLabel rename = PanelStyle.link("\u270E", "Rename this clock", () -> renameClock(index, line.getLabel()));
+		JLabel remove = PanelStyle.link("\u2715", "Remove this clock", () -> confirmRemove(index, line.getLabel()));
+		JPanel actions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 5, 0));
+		actions.setOpaque(false);
+		actions.add(up);
+		actions.add(down);
+		actions.add(rename);
+		actions.add(remove);
 
-		JPanel row = new JPanel(new BorderLayout());
-		row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		row.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
-		row.add(heading, BorderLayout.NORTH);
-		row.add(buttons, BorderLayout.SOUTH);
-		return row;
+		JPanel top = new JPanel(new BorderLayout(6, 0));
+		top.setOpaque(false);
+		top.add(label, BorderLayout.CENTER);
+		timeAndActions.add(actions, BorderLayout.EAST);
+
+		JPanel row = PanelStyle.column(2);
+		row.setOpaque(true);
+		row.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		row.setBorder(new EmptyBorder(6, 8, 6, 8));
+		row.add(top);
+		row.add(timeAndActions);
+		return PanelStyle.fixedHeight(row);
 	}
 
-	private JButton button(String text, String tooltip, boolean enabled, Runnable action)
+	/** Puts the time in {@code time} and the zone and any date in {@code rest}. */
+	private static void showTime(String formatted, JLabel time, JLabel rest)
 	{
-		JButton button = new JButton(text);
-		button.setToolTipText(tooltip);
-		button.setEnabled(enabled);
-		button.setMargin(new java.awt.Insets(0, 4, 0, 4));
-		button.addActionListener(e -> action.run());
-		return button;
+		Matcher m = TIME.matcher(formatted);
+		if (m.matches())
+		{
+			time.setText(m.group(1));
+			rest.setText(m.group(2).trim().replaceAll("\\s{2,}", " \u00B7 "));
+		}
+		else
+		{
+			time.setText(formatted);
+			rest.setText("");
+		}
 	}
 
 	private void renameClock(int index, String currentLabel)
 	{
-		String label = JOptionPane.showInputDialog(this, "Label for this clock:", currentLabel);
-		if (label != null && !label.trim().isEmpty())
+		Object label = JOptionPane.showInputDialog(this, "Name:", "Rename clock", JOptionPane.PLAIN_MESSAGE,
+			null, null, currentLabel);
+		if (label != null && !label.toString().trim().isEmpty())
 		{
-			clockList.renameClock(index, label.trim());
+			clockList.renameClock(index, label.toString().trim());
+		}
+	}
+
+	private void confirmRemove(int index, String label)
+	{
+		int answer = JOptionPane.showConfirmDialog(this, "Remove the " + label + " clock?", "Remove clock",
+			JOptionPane.YES_NO_OPTION);
+		if (answer == JOptionPane.YES_OPTION)
+		{
+			clockList.removeClock(index);
 		}
 	}
 
@@ -318,7 +385,8 @@ public class TimezoneHudPanel extends PluginPanel
 
 		for (int index = 0; index < lines.size(); index++)
 		{
-			timeLabels.get(index).setText(lines.get(index).getTime());
+			JLabel[] labels = timeLabels.get(index);
+			showTime(lines.get(index).getTime(), labels[0], labels[1]);
 		}
 
 		shownLines = lines;

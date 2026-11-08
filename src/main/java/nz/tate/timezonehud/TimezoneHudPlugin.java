@@ -36,6 +36,7 @@ import net.runelite.api.events.CommandExecuted;
 import net.runelite.client.chat.ChatCommandManager;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
@@ -107,7 +108,8 @@ public class TimezoneHudPlugin extends Plugin
 		overlay = new TimezoneHudOverlay(this, config, clockList, systemClock);
 		overlayManager.add(overlay);
 
-		panel = new TimezoneHudPanel(clockList, config, systemClock);
+		panel = new TimezoneHudPanel(clockList, config, systemClock,
+			(key, value) -> configManager.setConfiguration(TimezoneHudConfig.GROUP, key, value));
 		navigationButton = NavigationButton.builder()
 			.tooltip("World clocks")
 			.icon(ImageUtil.loadImageResource(TimezoneHudPlugin.class, "icon.png"))
@@ -165,6 +167,17 @@ public class TimezoneHudPlugin extends Plugin
 		if (ChatDisplayRewriter.rewrite(chatMessage, response))
 		{
 			client.refreshChat();
+		}
+	}
+
+	/** Keeps the side panel's switches and times in step with settings changed anywhere. */
+	@Subscribe
+	public void onConfigChanged(ConfigChanged event)
+	{
+		if (TimezoneHudConfig.GROUP.equals(event.getGroup()) && panel != null)
+		{
+			TimezoneHudPanel shown = panel;
+			SwingUtilities.invokeLater(shown::settingsChanged);
 		}
 	}
 
