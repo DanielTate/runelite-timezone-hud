@@ -16,9 +16,13 @@ From the RuneLite Plugin Hub, or build it yourself:
 
 ## Clocks
 
-Open the clock icon in the RuneLite sidebar. Search by city, abbreviation or IANA id
-(`auckland`, `EST`, `Europe/Paris`), click a result to add it, then rename, reorder or
-remove it. Every clock you add shows on the overlay, in panel order.
+Open the globe icon in the RuneLite sidebar. Your clocks are listed at the top with their
+current time. Under **Add a clock**, search by city, abbreviation or IANA id (`auckland`,
+`EST`, `Europe/Paris`) and click a result to add it. Each clock can be moved up or down,
+renamed or removed. Every clock you add shows on the overlay, in panel order.
+
+The **Display** switches at the bottom turn the on-screen clocks on and off and switch
+between 12- and 24-hour time, the same as the settings.
 
 Drag the overlay with alt held; RuneLite remembers where you put it.
 
